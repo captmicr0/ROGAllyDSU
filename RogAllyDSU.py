@@ -4,14 +4,14 @@ import struct
 import threading
 import time
 
-import win32com.client  # from pywin32
+from winsdk.windows.devices.sensors import Gyrometer, Accelerometer
 
 
-# ---------- Sensor reader (accel + gyro) ----------
+# ---------- Sensor reader (accel + gyro via WinRT) ----------
 
 class WindowsImuReader:
     """
-    Polls the default accelerometer and gyrometer via Windows Sensor API.
+    Polls the default accelerometer and gyrometer via Windows.Devices.Sensors.
     Exposes get_motion() -> (accel_x, accel_y, accel_z, gyro_pitch, gyro_yaw, gyro_roll)
     with axes mapped for DSU/cemuhook.
     """
@@ -21,9 +21,9 @@ class WindowsImuReader:
         self._lock = threading.Lock()
 
         # Raw values from Windows before mapping
-        self._accel_x = 0.0  # AccelerationX  -> roll
-        self._accel_y = 0.0  # AccelerationY  -> pitch
-        self._accel_z = 0.0  # AccelerationZ  -> yaw
+        self._accel_x = 0.0  # AccelerationX -> roll
+        self._accel_y = 0.0  # AccelerationY -> pitch
+        self._accel_z = 0.0  # AccelerationZ -> yaw
 
         self._gyro_x = 0.0   # AngularVelocityX -> pitch
         self._gyro_y = 0.0   # AngularVelocityY -> roll
@@ -31,70 +31,49 @@ class WindowsImuReader:
 
         self._stop = False
 
-        self._sensor_manager = win32com.client.Dispatch(
-            "SensorManager.SensorManager"
-        )
+        # Get default WinRT sensors.[web:35][web:125]
+        self._gyro = Gyrometer.get_default()
+        self._accel = Accelerometer.get_default()
 
-        # GUIDs from Windows sensor types.
-        self._accel_type = "{C2FB0F5F-2B3A-4C02-9870-9CCFD2E3F9E5}"   # SENSOR_TYPE_ACCELEROMETER_3D
-        self._gyro_type = "{09485F5A-759E-42C2-BD4B-A349B75C8643}"    # SENSOR_TYPE_GYROMETER_3D
-
-        self._accel_sensor = self._get_default_sensor(self._accel_type)
-        if self._accel_sensor is None:
+        if self._accel is None:
             raise RuntimeError("No accelerometer sensor found")
-
-        self._gyro_sensor = self._get_default_sensor(self._gyro_type)
-        if self._gyro_sensor is None:
+        if self._gyro is None:
             raise RuntimeError("No gyrometer sensor found")
+
+        # Try to set report interval close to poll interval (in ms)
+        desired_ms = int(self.poll_interval * 1000)
+        self._gyro.report_interval = max(self._gyro.minimum_report_interval, desired_ms)
+        self._accel.report_interval = max(self._accel.minimum_report_interval, desired_ms)
 
         self._thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._thread.start()
 
-    def _get_default_sensor(self, sensor_type_guid):
-        sensors = self._sensor_manager.GetSensorsByType(sensor_type_guid)
-        if sensors is None:
-            return None
-        if sensors.GetCount() == 0:
-            return None
-        return sensors.GetAt(0)
-
     def _poll_loop(self):
         while not self._stop:
             try:
-                # Accelerometer: values in g.
-                a_report = self._accel_sensor.GetData()
-                # Property keys here stay in the same order you saw in SensorExplorer;
-                # the string IDs are placeholders that you’ll likely adjust to the
-                # exact PROPERTYKEYs once you inspect them.
-                ax = float(a_report.GetSensorValue(
-                    "{C2FB0F5F-2B3A-4C02-9870-9CCFD2E3F9E5}, 3"
-                ))  # AccelerationX -> roll
-                ay = float(a_report.GetSensorValue(
-                    "{C2FB0F5F-2B3A-4C02-9870-9CCFD2E3F9E5}, 4"
-                ))  # AccelerationY -> pitch
-                az = float(a_report.GetSensorValue(
-                    "{C2FB0F5F-2B3A-4C02-9870-9CCFD2E3F9E5}, 5"
-                ))  # AccelerationZ -> yaw
+                # Accelerometer reading (may be None).[web:125]
+                a_read = self._accel.get_current_reading()
+                if a_read is not None:
+                    ax = float(a_read.acceleration_x)  # roll
+                    ay = float(a_read.acceleration_y)  # pitch
+                    az = float(a_read.acceleration_z)  # yaw
 
-                # Gyro: values in deg/s.[web:50]
-                g_report = self._gyro_sensor.GetData()
-                gx = float(g_report.GetSensorValue(
-                    "{09485F5A-759E-42C2-BD4B-A349B75C8643}, 3"
-                ))  # AngularVelocityX -> pitch
-                gy = float(g_report.GetSensorValue(
-                    "{09485F5A-759E-42C2-BD4B-A349B75C8643}, 4"
-                ))  # AngularVelocityY -> roll
-                gz = float(g_report.GetSensorValue(
-                    "{09485F5A-759E-42C2-BD4B-A349B75C8643}, 5"
-                ))  # AngularVelocityZ -> yaw
+                    with self._lock:
+                        self._accel_x = ax
+                        self._accel_y = ay
+                        self._accel_z = az
 
-                with self._lock:
-                    self._accel_x = ax
-                    self._accel_y = ay
-                    self._accel_z = az
-                    self._gyro_x = gx
-                    self._gyro_y = gy
-                    self._gyro_z = gz
+                # Gyro reading (may be None).[web:35]
+                g_read = self._gyro.get_current_reading()
+                if g_read is not None:
+                    gx = float(g_read.angular_velocity_x)  # pitch (deg/s)
+                    gy = float(g_read.angular_velocity_y)  # roll
+                    gz = float(g_read.angular_velocity_z)  # yaw
+
+                    with self._lock:
+                        self._gyro_x = gx
+                        self._gyro_y = gy
+                        self._gyro_z = gz
 
             except Exception:
                 # On any failure, keep last values
@@ -120,7 +99,7 @@ class WindowsImuReader:
         #   AccelX -> roll
         #   AccelY -> pitch
         #   AccelZ -> yaw
-        # DSU wants accel X,Y,Z loosely aligned with pitch,yaw,roll.
+        # DSU accel X,Y,Z loosely aligned with pitch,yaw,roll.
         accel_x = ay   # pitch
         accel_y = az   # yaw
         accel_z = ax   # roll
@@ -188,7 +167,7 @@ class DSUServer:
                 continue
 
             magic = data[:4]
-            # DSUC = client → server registration; record client endpoint.
+            # DSUC = client → server registration; record client endpoint.[web:60]
             if magic == b"DSUC":
                 self._clients.add(addr)
 
@@ -200,7 +179,7 @@ class DSUServer:
 
             accel_x, accel_y, accel_z, gyro_pitch, gyro_yaw, gyro_roll = \
                 self.imu_reader.get_motion()
-            
+
             # Apply accel/gyro masks according to CLI flags.
             if not self.send_accel:
                 accel_x = accel_y = accel_z = 0.0
@@ -242,18 +221,12 @@ class DSUServer:
         gyro_yaw,
         gyro_roll,
     ):
-        # Header for server→client packet.
+        # Header for server→client packet.[web:60]
         magic = b"DSUS"
         version = 1
-        packet_type = 0x1001  # “Actual controller data”; matches protocol docs
+        packet_type = 0x1001  # “Actual controller data”
         crc32 = 0
 
-        # Minimal identification + state; this is a simplified version:
-        #  - 11-byte identification block (slot-based)
-        #  - then "connected" flag, packet number, buttons, sticks
-        #  - then touch and motion fields
-        #
-        # For now this uses neutral values for buttons/sticks/touch; only motion is meaningful.
         # Identification header (11 bytes):
         #   u8 flags (1 = slot-based registration)
         #   u8 slot
@@ -371,7 +344,6 @@ def main():
         print("NOTE: accelerometer data disabled (sending gyro only).")
     if args.no_gyro:
         print("NOTE: gyroscope data disabled (sending accel only).")
-    
     print("Configure your emulator to use this IP/port as a cemuhook/DSU server.")
 
     server.start()
