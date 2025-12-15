@@ -124,18 +124,20 @@ class WindowsImuReader:
 class DSUServer:
     DSU_PORT = 26760
 
-    def __init__(self, imu_reader, send_hz=250, send_accel=True, send_gyro=True):
+    def __init__(self, imu_reader, send_hz=250, send_accel=True, send_gyro=True,
+                 sensitivity=1.0):
         self.imu_reader = imu_reader
         self.send_interval = 1.0 / send_hz
         self.send_accel = send_accel
         self.send_gyro = send_gyro
+        self.sensitivity = float(sensitivity)
 
         # Determine local IP (best-effort)
         hostname = socket.gethostname()
-        self.host_ip = socket.gethostbyname(hostname)
+        self.host_ip = "0.0.0.0"
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(("0.0.0.0", self.DSU_PORT))
+        self.sock.bind((self.host_ip, self.DSU_PORT))
         self.sock.settimeout(0.1)
 
         self._clients = set()
@@ -167,8 +169,11 @@ class DSUServer:
                 continue
 
             magic = data[:4]
-            # DSUC = client → server registration; record client endpoint.[web:60]
+            # DSUC = client → server registration; record client endpoint.
             if magic == b"DSUC":
+                if addr not in self._clients:
+                    ip, port = addr
+                    print(f"Client connected from {ip}:{port}")
                 self._clients.add(addr)
 
     def _send_loop(self):
@@ -185,6 +190,15 @@ class DSUServer:
                 accel_x = accel_y = accel_z = 0.0
             if not self.send_gyro:
                 gyro_pitch = gyro_yaw = gyro_roll = 0.0
+            
+            # Apply global sensitivity (both accel and gyro).
+            s = self.sensitivity
+            accel_x *= s
+            accel_y *= s
+            accel_z *= s
+            gyro_pitch *= s
+            gyro_yaw *= s
+            gyro_roll *= s
 
             packet = self._build_motion_packet(
                 slot=0,
@@ -327,6 +341,13 @@ def main():
         default=250,
         help="Sampling and send rate in Hz (default: 250).",
     )
+    parser.add_argument(
+        "-s",
+        "--sensitivity",
+        type=float,
+        default=1.0,
+        help="Global motion sensitivity multiplier (default: 1.0).",
+    )
     args = parser.parse_args()
 
     imu_reader = WindowsImuReader(poll_hz=args.rate)
@@ -335,6 +356,7 @@ def main():
         send_hz=args.rate,
         send_accel=not args.no_accel,
         send_gyro=not args.no_gyro,
+        sensitivity=args.sensitivity,
     )
 
     print(
