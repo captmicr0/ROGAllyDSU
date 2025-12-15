@@ -14,14 +14,11 @@ def main():
     if gyro is None and accel is None:
         return
 
-    # Try to set report interval around 500 ms if supported
     desired_ms = 500
     if gyro is not None:
-        min_gyro = gyro.minimum_report_interval
-        gyro.report_interval = max(min_gyro, desired_ms)
+        gyro.report_interval = max(gyro.minimum_report_interval, desired_ms)
     if accel is not None:
-        min_accel = accel.minimum_report_interval
-        accel.report_interval = max(min_accel, desired_ms)
+        accel.report_interval = max(accel.minimum_report_interval, desired_ms)
 
     print("Reading sensors every ~0.5 s. Press Ctrl+C to stop.")
 
@@ -29,19 +26,25 @@ def main():
         while True:
             if gyro is not None:
                 g_read = gyro.get_current_reading()
-                gx = g_read.angular_velocity_x
-                gy = g_read.angular_velocity_y
-                gz = g_read.angular_velocity_z
-                print(f"GYRO  dps  X={gx:8.3f}  Y={gy:8.3f}  Z={gz:8.3f}")
+                if g_read is not None:
+                    gx = g_read.angular_velocity_x
+                    gy = g_read.angular_velocity_y
+                    gz = g_read.angular_velocity_z
+                    print(f"GYRO  dps  X={gx:8.3f}  Y={gy:8.3f}  Z={gz:8.3f}")
+                else:
+                    print("GYRO  dps  (no reading)")
             else:
                 print("GYRO  dps  (not available)")
 
             if accel is not None:
                 a_read = accel.get_current_reading()
-                ax = a_read.acceleration_x
-                ay = a_read.acceleration_y
-                az = a_read.acceleration_z
-                print(f"ACCEL g    X={ax:8.3f}  Y={ay:8.3f}  Z={az:8.3f}")
+                if a_read is not None:
+                    ax = a_read.acceleration_x
+                    ay = a_read.acceleration_y
+                    az = a_read.acceleration_z
+                    print(f"ACCEL g    X={ax:8.3f}  Y={ay:8.3f}  Z={az:8.3f}")
+                else:
+                    print("ACCEL g    (no reading)")
             else:
                 print("ACCEL g    (not available)")
 
