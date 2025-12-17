@@ -231,8 +231,8 @@ class DSUServer:
             [
                 # HEADER
                 struct.pack(">4s", b'DSUS'),            # MAGIC STRING (DSUS)
-                struct.pack("<H", 0x1001),              # VERSION (1001)
-                struct.pack("<H", 80),                  # LENGTH
+                struct.pack("<H", 1001),                # VERSION (1001)
+                struct.pack("<H", 84),                  # LENGTH
                 struct.pack("<I", 0),                   # CRC32
                 struct.pack("<I", 0x66778899),          # CLIENT/SERVER ID
 
