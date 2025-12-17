@@ -212,7 +212,6 @@ class DSUServer:
                 try:
                     self.sock.sendto(packet, addr)
                     ip, port = addr
-                    print(f"sent packet to {ip}:{port}")
                 except OSError:
                     self._clients.discard(addr)
 
@@ -232,59 +231,57 @@ class DSUServer:
             [
                 # HEADER
                 struct.pack(">4s", b'DSUS'),            # MAGIC STRING (DSUS)
-                struct.pack(">H", 0x1001),              # VERSION (1001)
-                struct.pack(">H", 80),                  # LENGTH
-                struct.pack(">I", 0),                   # CRC32
-                struct.pack(">I", 0x66778899),          # CLIENT/SERVER ID
+                struct.pack("<H", 0x1001),              # VERSION (1001)
+                struct.pack("<H", 80),                  # LENGTH
+                struct.pack("<I", 0),                   # CRC32
+                struct.pack("<I", 0x66778899),          # CLIENT/SERVER ID
 
                 # EVENT TYPE
-                struct.pack(">I", 0x100002),            # EVENT TYPE (Not actually part of header so it counts as length)
+                struct.pack("<I", 0x100002),            # EVENT TYPE (Not actually part of header so it counts as length)
                                                         # (0x100002 = Actual controllers data)
 
                 # BEGINNING
-                struct.pack(">B", 0),                   # SLOT
-                struct.pack(">B", 2),                   # SLOT STATE (2 = CONNECTED)
-                struct.pack(">B", 2),                   # DEVICE MODEL (2 = FULL GYRO)
-                struct.pack(">B", 2),                   # CONNECTION TYPE (2 = BLUETOOTH)
+                struct.pack("<B", 0),                   # SLOT
+                struct.pack("<B", 2),                   # SLOT STATE (2 = CONNECTED)
+                struct.pack("<B", 2),                   # DEVICE MODEL (2 = FULL GYRO)
+                struct.pack("<B", 2),                   # CONNECTION TYPE (2 = BLUETOOTH)
                 struct.pack(">6s", b'\x22\x33\x44\x55'),# MAC ADDRESS OF DEVICE
-                struct.pack(">B", 0x05),                # BATTERY STATUS (0x05 = FULL)
+                struct.pack("<B", 0x05),                # BATTERY STATUS (0x05 = FULL)
 
                 # CONTROLLER DATA
-                struct.pack(">B", 1),                   # IS CONNECTED (1 = CONNECTED)
-                struct.pack(">I", packet_counter),      # PACKET NUMBER
-                struct.pack(">B", 0),                   # BUTTONS BITMASK
-                struct.pack(">B", 0),                   # BUTTONS BITMASK
-                struct.pack(">B", 0),                   # HOME BUTTON
-                struct.pack(">B", 0),                   # TOUCH BUTTON
-                struct.pack(">B", 128),                 # LEFT STICK X (+R, -L)
-                struct.pack(">B", 128),                 # LEFT STICK Y (+U, -D)
-                struct.pack(">B", 128),                 # RIGHT STICK X (+R, -L)
-                struct.pack(">B", 128),                 # RIGHT STICK Y (+U, -D)
-                struct.pack(">B", 0),                   # ANALOG D-PAD LEFT
-                struct.pack(">B", 0),                   # ANALOG D-PAD DOWN
-                struct.pack(">B", 0),                   # ANALOG D-PAD RIGHT
-                struct.pack(">B", 0),                   # ANALOG D-PAD UP
-                struct.pack(">B", 0),                   # ANALOG Y
-                struct.pack(">B", 0),                   # ANALOG B
-                struct.pack(">B", 0),                   # ANALOG A
-                struct.pack(">B", 0),                   # ANALOG X
-                struct.pack(">B", 0),                   # ANALOG R1
-                struct.pack(">B", 0),                   # ANALOG L1
-                struct.pack(">B", 0),                   # ANALOG R2
-                struct.pack(">B", 0),                   # ANALOG L2
-                struct.pack(">BBHH", 0, 0, 0, 0),       # FIRST TOUCH
-                struct.pack(">BBHH", 0, 0, 0, 0),       # SECOND TOUCH
-                struct.pack(">Q", int(time.time() * 1000000)),   # MOTION TIMESTAMP IN uS
-                struct.pack(">f", float(accel_x)),      # ACCELEROMETER X AXIS
-                struct.pack(">f", float(accel_y)),      # ACCELEROMETER Y AXIS
-                struct.pack(">f", float(accel_z)),      # ACCELEROMETER Z AXIS
-                struct.pack(">f", float(gyro_pitch)),   # GYROSCOPE PITCH
-                struct.pack(">f", float(gyro_yaw)),     # GYROSCOPE YAW
-                struct.pack(">f", float(gyro_roll)),    # GYROSCOPE ROLL
+                struct.pack("<B", 1),                   # IS CONNECTED (1 = CONNECTED)
+                struct.pack("<I", packet_counter),      # PACKET NUMBER
+                struct.pack("<B", 0),                   # BUTTONS BITMASK
+                struct.pack("<B", 0),                   # BUTTONS BITMASK
+                struct.pack("<B", 0),                   # HOME BUTTON
+                struct.pack("<B", 0),                   # TOUCH BUTTON
+                struct.pack("<B", 128),                 # LEFT STICK X (+R, -L)
+                struct.pack("<B", 128),                 # LEFT STICK Y (+U, -D)
+                struct.pack("<B", 128),                 # RIGHT STICK X (+R, -L)
+                struct.pack("<B", 128),                 # RIGHT STICK Y (+U, -D)
+                struct.pack("<B", 0),                   # ANALOG D-PAD LEFT
+                struct.pack("<B", 0),                   # ANALOG D-PAD DOWN
+                struct.pack("<B", 0),                   # ANALOG D-PAD RIGHT
+                struct.pack("<B", 0),                   # ANALOG D-PAD UP
+                struct.pack("<B", 0),                   # ANALOG Y
+                struct.pack("<B", 0),                   # ANALOG B
+                struct.pack("<B", 0),                   # ANALOG A
+                struct.pack("<B", 0),                   # ANALOG X
+                struct.pack("<B", 0),                   # ANALOG R1
+                struct.pack("<B", 0),                   # ANALOG L1
+                struct.pack("<B", 0),                   # ANALOG R2
+                struct.pack("<B", 0),                   # ANALOG L2
+                struct.pack("<BBHH", 0, 0, 0, 0),       # FIRST TOUCH
+                struct.pack("<BBHH", 0, 0, 0, 0),       # SECOND TOUCH
+                struct.pack("<Q", int(time.time() * 1000000)),   # MOTION TIMESTAMP IN uS
+                struct.pack("<f", float(accel_x)),      # ACCELEROMETER X AXIS
+                struct.pack("<f", float(accel_y)),      # ACCELEROMETER Y AXIS
+                struct.pack("<f", float(accel_z)),      # ACCELEROMETER Z AXIS
+                struct.pack("<f", float(gyro_pitch)),   # GYROSCOPE PITCH
+                struct.pack("<f", float(gyro_yaw)),     # GYROSCOPE YAW
+                struct.pack("<f", float(gyro_roll)),    # GYROSCOPE ROLL
             ]
         )
-
-        assert len(packet) == 100, f"packet wrong size (length={len(packet)})"
 
         return packet
 
