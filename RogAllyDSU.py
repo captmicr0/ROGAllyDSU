@@ -273,7 +273,7 @@ class DSUServer:
                 struct.pack(">B", 0),                   # ANALOG L2
                 struct.pack(">BBHH", 0, 0, 0, 0),       # FIRST TOUCH
                 struct.pack(">BBHH", 0, 0, 0, 0),       # SECOND TOUCH
-                struct.pack(">Q", int(time.time(), 1000000)),   # MOTION TIMESTAMP IN uS
+                struct.pack(">Q", int(time.time() * 1000000)),   # MOTION TIMESTAMP IN uS
                 struct.pack(">f", float(accel_x)),      # ACCELEROMETER X AXIS
                 struct.pack(">f", float(accel_y)),      # ACCELEROMETER Y AXIS
                 struct.pack(">f", float(accel_z)),      # ACCELEROMETER Z AXIS
