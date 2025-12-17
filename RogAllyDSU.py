@@ -220,10 +220,7 @@ class DSUServer:
 
     def _build_motion_packet(
         self,
-        slot,
-        connected,
         packet_counter,
-        timestamp_us,
         accel_x,
         accel_y,
         accel_z,
