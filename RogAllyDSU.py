@@ -283,7 +283,7 @@ class DSUServer:
             ]
         )
 
-        assert len(packet) == 100, print(f"packet wrong size (length={len(packet)})")
+        assert len(packet) == 100, f"packet wrong size (length={len(packet)})"
 
         return packet
 
