@@ -51,7 +51,7 @@ class WindowsImuReader:
     def _poll_loop(self):
         while not self._stop:
             try:
-                # Accelerometer reading (may be None).[web:125]
+                # Accelerometer reading (may be None).
                 a_read = self._accel.get_current_reading()
                 if a_read is not None:
                     ax = float(a_read.acceleration_x)  # roll
@@ -85,7 +85,7 @@ class WindowsImuReader:
         """
         Return mapped DSU axes:
         accel_x, accel_y, accel_z, gyro_pitch, gyro_yaw, gyro_roll
-        accel in g's, gyro in deg/s (matches cemuhook spec).[web:60]
+        accel in g's, gyro in deg/s (matches cemuhook spec).
         """
         with self._lock:
             ax = self._accel_x
@@ -179,9 +179,6 @@ class DSUServer:
     def _send_loop(self):
         packet_counter = 0
         while not self._stop:
-            now = time.time()
-            timestamp_us = int(now * 1_000_000)
-
             accel_x, accel_y, accel_z, gyro_pitch, gyro_yaw, gyro_roll = \
                 self.imu_reader.get_motion()
 
@@ -201,10 +198,7 @@ class DSUServer:
             gyro_roll *= s
 
             packet = self._build_motion_packet(
-                slot=0,
-                connected=True,
                 packet_counter=packet_counter,
-                timestamp_us=timestamp_us,
                 accel_x=accel_x,
                 accel_y=accel_y,
                 accel_z=accel_z,
@@ -237,89 +231,64 @@ class DSUServer:
         gyro_yaw,
         gyro_roll,
     ):
-        # Header for server→client packet.[web:60]
-        magic = b"DSUS"
-        version = 1
-        packet_type = 0x1001  # “Actual controller data”
-        crc32 = 0
-
-        # Identification header (11 bytes):
-        #   u8 flags (1 = slot-based registration)
-        #   u8 slot
-        #   6-byte MAC (dummy)
-        #   u16 reserved
-        ident_flags = 1
-        ident_slot = slot & 0xFF
-        mac_bytes = b"\x00\x11\x22\x33\x44\x55"
-        ident_reserved = 0
-
-        ident = struct.pack(
-            ">BB6sH",
-            ident_flags,
-            ident_slot,
-            mac_bytes,
-            ident_reserved,
-        )
-
-        is_connected = 1 if connected else 0
-        buttons_1 = 0
-        buttons_2 = 0
-        home_btn = 0
-        touch_btn = 0
-        left_x = 128
-        left_y = 128
-        right_x = 128
-        right_y = 128
-        adpad_l = adpad_d = adpad_r = adpad_u = 0
-        analog_y = analog_b = analog_a = analog_x = 0
-        analog_r1 = analog_l1 = analog_r2 = analog_l2 = 0
-
-        # Two empty touches (inactive)
-        touch_struct = struct.pack(">BBHH", 0, 0, 0, 0)
-        touch1 = touch_struct
-        touch2 = touch_struct
-
-        payload = b"".join(
+        packet = b"".join(
             [
-                ident,
-                struct.pack(">B", is_connected),
-                struct.pack(">I", packet_counter),
-                struct.pack(">B", buttons_1),
-                struct.pack(">B", buttons_2),
-                struct.pack(">B", home_btn),
-                struct.pack(">B", touch_btn),
-                struct.pack(">B", left_x),
-                struct.pack(">B", left_y),
-                struct.pack(">B", right_x),
-                struct.pack(">B", right_y),
-                struct.pack(">B", adpad_l),
-                struct.pack(">B", adpad_d),
-                struct.pack(">B", adpad_r),
-                struct.pack(">B", adpad_u),
-                struct.pack(">B", analog_y),
-                struct.pack(">B", analog_b),
-                struct.pack(">B", analog_a),
-                struct.pack(">B", analog_x),
-                struct.pack(">B", analog_r1),
-                struct.pack(">B", analog_l1),
-                struct.pack(">B", analog_r2),
-                struct.pack(">B", analog_l2),
-                touch1,
-                touch2,
-                struct.pack(">Q", timestamp_us),
-                struct.pack(">f", float(accel_x)),
-                struct.pack(">f", float(accel_y)),
-                struct.pack(">f", float(accel_z)),
-                struct.pack(">f", float(gyro_pitch)),
-                struct.pack(">f", float(gyro_yaw)),
-                struct.pack(">f", float(gyro_roll)),
+                # HEADER
+                struct.pack(">4s", b'DSUS'),            # MAGIC STRING (DSUS)
+                struct.pack(">H", 0x1001),              # VERSION (1001)
+                struct.pack(">H", 80),                  # LENGTH
+                struct.pack(">I", 0),                   # CRC32
+
+                # EVENT TYPE
+                struct.pack(">I", 0x100002),            # EVENT TYPE (Not actually part of header so it counts as length)
+                                                        # (0x100002 = Actual controllers data)
+
+                # BEGINNING
+                struct.pack(">B", 0),                   # SLOT
+                struct.pack(">B", 2),                   # SLOT STATE (2 = CONNECTED)
+                struct.pack(">B", 2),                   # DEVICE MODEL (2 = FULL GYRO)
+                struct.pack(">B", 2),                   # CONNECTION TYPE (2 = BLUETOOTH)
+                struct.pack(">6s", 0x22334455),         # MAC ADDRESS OF DEVICE
+                struct.pack(">B", 0x05),                # BATTERY STATUS (0x05 = FULL)
+
+                # CONTROLLER DATA
+                struct.pack(">B", 1),                   # IS CONNECTED (1 = CONNECTED)
+                struct.pack(">I", packet_counter),      # PACKET NUMBER
+                struct.pack(">B", 0),                   # BUTTONS BITMASK
+                struct.pack(">B", 0),                   # BUTTONS BITMASK
+                struct.pack(">B", 0),                   # HOME BUTTON
+                struct.pack(">B", 0),                   # TOUCH BUTTON
+                struct.pack(">B", 128),                 # LEFT STICK X (+R, -L)
+                struct.pack(">B", 128),                 # LEFT STICK Y (+U, -D)
+                struct.pack(">B", 128),                 # RIGHT STICK X (+R, -L)
+                struct.pack(">B", 128),                 # RIGHT STICK Y (+U, -D)
+                struct.pack(">B", 0),                   # ANALOG D-PAD LEFT
+                struct.pack(">B", 0),                   # ANALOG D-PAD DOWN
+                struct.pack(">B", 0),                   # ANALOG D-PAD RIGHT
+                struct.pack(">B", 0),                   # ANALOG D-PAD UP
+                struct.pack(">B", 0),                   # ANALOG Y
+                struct.pack(">B", 0),                   # ANALOG B
+                struct.pack(">B", 0),                   # ANALOG A
+                struct.pack(">B", 0),                   # ANALOG X
+                struct.pack(">B", 0),                   # ANALOG R1
+                struct.pack(">B", 0),                   # ANALOG L1
+                struct.pack(">B", 0),                   # ANALOG R2
+                struct.pack(">B", 0),                   # ANALOG L2
+                struct.pack(">BBHH", 0, 0, 0, 0),       # FIRST TOUCH
+                struct.pack(">BBHH", 0, 0, 0, 0),       # SECOND TOUCH
+                struct.pack(">Q", int(time.time(), 1000000)),   # MOTION TIMESTAMP IN uS
+                struct.pack(">f", float(accel_x)),      # ACCELEROMETER X AXIS
+                struct.pack(">f", float(accel_y)),      # ACCELEROMETER Y AXIS
+                struct.pack(">f", float(accel_z)),      # ACCELEROMETER Z AXIS
+                struct.pack(">f", float(gyro_pitch)),   # GYROSCOPE PITCH
+                struct.pack(">f", float(gyro_yaw)),     # GYROSCOPE YAW
+                struct.pack(">f", float(gyro_roll)),    # GYROSCOPE ROLL
             ]
         )
 
-        length = len(payload)
-        header = struct.pack(">4sHHHI", magic, version, packet_type, length, crc32)
-        return header + payload
+        assert len(packet) == 100, print(f"packet wrong size (length={len(packet)})")
 
+        return packet
 
 # ---------- Main ----------
 
