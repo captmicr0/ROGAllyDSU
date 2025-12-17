@@ -217,6 +217,8 @@ class DSUServer:
             for addr in list(self._clients):
                 try:
                     self.sock.sendto(packet, addr)
+                    ip, port = addr
+                    print(f"sent packet to {ip}:{port}")
                 except OSError:
                     self._clients.discard(addr)
 
