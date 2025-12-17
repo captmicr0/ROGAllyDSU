@@ -3,6 +3,7 @@ import socket
 import struct
 import threading
 import time
+import zlib
 
 from winsdk.windows.devices.sensors import Gyrometer, Accelerometer
 
@@ -282,8 +283,14 @@ class DSUServer:
                 struct.pack("<f", float(gyro_roll)),    # GYROSCOPE ROLL
             ]
         )
+        
+        crc = zlib.crc32(packet) & 0xFFFFFFFF
 
-        return packet
+        # Splice CRC into bytes 8–11 (little‑endian)
+        packet = bytearray(packet)
+        packet[8:12] = struct.pack("<I", crc)
+
+        return bytes(packet)
 
 # ---------- Main ----------
 
