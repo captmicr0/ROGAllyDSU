@@ -245,7 +245,7 @@ class DSUServer:
                 struct.pack(">B", 2),                   # SLOT STATE (2 = CONNECTED)
                 struct.pack(">B", 2),                   # DEVICE MODEL (2 = FULL GYRO)
                 struct.pack(">B", 2),                   # CONNECTION TYPE (2 = BLUETOOTH)
-                struct.pack(">6s", 0x22334455),         # MAC ADDRESS OF DEVICE
+                struct.pack(">6s", b'\x22\x33\x44\x55'),# MAC ADDRESS OF DEVICE
                 struct.pack(">B", 0x05),                # BATTERY STATUS (0x05 = FULL)
 
                 # CONTROLLER DATA
