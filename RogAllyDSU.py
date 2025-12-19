@@ -239,6 +239,15 @@ class DSUServer:
             gyro_yaw *= s
             gyro_roll *= s
 
+            for addr in list(self._reportclients):
+                try:
+                    for slot in self._reportslots:
+                        print(f"slot {slot} info report")
+                        packet = self._build_info_packet(slot, slot==0) # only report slot 0 as connected
+                        self.sock.sendto(packet, addr)
+                except OSError:
+                    self._reportclients.discard(addr)
+
             packet = self._build_motion_packet(
                 packet_counter=packet_counter,
                 accel_x=accel_x,
@@ -250,15 +259,6 @@ class DSUServer:
             )
             packet_counter = (packet_counter + 1) & 0xFFFFFFFF
 
-            for addr in list(self._reportclients):
-                try:
-                    for slot in self._reportslots:
-                        print(f"slot {slot} info report")
-                        packet = self._build_info_packet(slot, slot==0) # only report slot 0 as connected
-                        self.sock.sendto(packet, addr)
-                except OSError:
-                    self._reportclients.discard(addr)
-            
             for addr in list(self._clients):
                 try:
                     self.sock.sendto(packet, addr)
