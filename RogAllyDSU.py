@@ -16,9 +16,15 @@ class WindowsImuReader:
     Exposes get_motion() -> (accel_x, accel_y, accel_z, gyro_pitch, gyro_yaw, gyro_roll)
     with axes mapped for DSU/cemuhook.
     """
-
-    def __init__(self, poll_hz=250):
+    
+    def __init__(self, poll_hz=250, clamp_accel=False, clamp_accel_limit=5.0, 
+             clamp_gyro=False, clamp_gyro_limit=150.0):
         self.poll_interval = 1.0 / poll_hz
+        self._clamp_accel = clamp_accel
+        self._clamp_accel_limit = clamp_accel_limit
+        self._clamp_gyro = clamp_gyro
+        self._clamp_gyro_limit = clamp_gyro_limit
+
         self._lock = threading.Lock()
 
         # Raw values from Windows before mapping
@@ -32,7 +38,7 @@ class WindowsImuReader:
 
         self._stop = False
 
-        # Get default WinRT sensors.[web:35][web:125]
+        # Get default WinRT sensors.
         self._gyro = Gyrometer.get_default()
         self._accel = Accelerometer.get_default()
 
@@ -59,28 +65,31 @@ class WindowsImuReader:
                     ay = float(a_read.acceleration_y)  # pitch
                     az = float(a_read.acceleration_z)  # yaw
 
-                    ACCEL_CLAMP = 5.0  # g-force max
-                    ax = max(min(ax, ACCEL_CLAMP), -ACCEL_CLAMP)
-                    ay = max(min(ay, ACCEL_CLAMP), -ACCEL_CLAMP)
-                    az = max(min(az, ACCEL_CLAMP), -ACCEL_CLAMP)
-
+                    # Clamp accel if enabled
+                    if self._clamp_accel:
+                        limit = self._clamp_accel_limit
+                        ax = max(min(ax, limit), -limit)
+                        ay = max(min(ay, limit), -limit)
+                        az = max(min(az, limit), -limit)
+                    
                     with self._lock:
                         self._accel_x = ax
                         self._accel_y = ay
                         self._accel_z = az
 
-                # Gyro reading (may be None).[web:35]
+                # Gyro reading (may be None).
                 g_read = self._gyro.get_current_reading()
                 if g_read is not None:
                     gx = float(g_read.angular_velocity_x)  # pitch (deg/s)
                     gy = float(g_read.angular_velocity_y)  # roll
                     gz = float(g_read.angular_velocity_z)  # yaw
 
-                    # Clamp to realistic ranges to filter noise/spikes
-                    GYRO_CLAMP = 150.0  # degrees per second max (senor seems to max at -124/+124)
-                    gx = max(min(gx, GYRO_CLAMP), -GYRO_CLAMP)
-                    gy = max(min(gy, GYRO_CLAMP), -GYRO_CLAMP)
-                    gz = max(min(gz, GYRO_CLAMP), -GYRO_CLAMP)
+                    # Clamp gyro if enabled
+                    if self._clamp_gyro:
+                        limit = self._clamp_gyro_limit
+                        gx = max(min(gx, limit), -limit)
+                        gy = max(min(gy, limit), -limit)
+                        gz = max(min(gz, limit), -limit)
 
                     with self._lock:
                         self._gyro_x = gx
@@ -183,10 +192,15 @@ class DSUServer:
             magic = data[:4]
             # DSUC = client → server registration; record client endpoint.
             if magic == b"DSUC":
-                if addr not in self._clients:
-                    ip, port = addr
-                    print(f"Client connected from {ip}:{port}")
-                self._clients.add(addr)
+                event_type = int.from_bytes(x[16:16+4], 'little', signed=False)
+                if event_type == 0x100001:
+                    packet = self._build_info_packet()
+                    self.sock.sendto(packet, addr)
+                if event_type == 0x100002: # Actual controllers data
+                    if addr not in self._clients:
+                        ip, port = addr
+                        print(f"Client connected from {ip}:{port}")
+                    self._clients.add(addr)
 
     def _send_loop(self):
         packet_counter = 0
@@ -228,6 +242,41 @@ class DSUServer:
                     self._clients.discard(addr)
 
             time.sleep(self.send_interval)
+
+    def _build_info_packet(self):
+        packet = b"".join(
+            [
+                # HEADER
+                struct.pack(">4s", b'DSUS'),            # MAGIC STRING (DSUS)
+                struct.pack("<H", 1001),                # VERSION (1001)
+                struct.pack("<H", 84),                  # LENGTH
+                struct.pack("<I", 0),                   # CRC32
+                struct.pack("<I", 0x66778899),          # CLIENT/SERVER ID
+
+                # EVENT TYPE
+                struct.pack("<I", 0x100002),            # EVENT TYPE (Not actually part of header so it counts as length)
+                                                        # (0x100002 = Actual controllers data)
+
+                # BEGINNING
+                struct.pack("<B", 0),                   # SLOT
+                struct.pack("<B", 2),                   # SLOT STATE (2 = CONNECTED)
+                struct.pack("<B", 2),                   # DEVICE MODEL (2 = FULL GYRO)
+                struct.pack("<B", 2),                   # CONNECTION TYPE (2 = BLUETOOTH)
+                struct.pack(">6s", b'\x00\x00\x00\x00'),# MAC ADDRESS OF DEVICE
+                struct.pack("<B", 0x05),                # BATTERY STATUS (0x05 = FULL)
+
+                # ZERO BYTE
+                struct.pack("<B", 0),                   # ZERo BYTE
+            ]
+        )
+        
+        crc = zlib.crc32(packet) & 0xFFFFFFFF
+
+        # Splice CRC into bytes 8–11 (little‑endian)
+        packet = bytearray(packet)
+        packet[8:12] = struct.pack("<I", crc)
+
+        return bytes(packet)
 
     def _build_motion_packet(
         self,
@@ -309,29 +358,17 @@ def main():
     parser = argparse.ArgumentParser(
         description="ROG Ally DSU motion server (accel+gyro)"
     )
-    parser.add_argument(
-        "--no-accel",
-        action="store_true",
-        help="Do not send accelerometer data in DSU packets.",
-    )
-    parser.add_argument(
-        "--no-gyro",
-        action="store_true",
-        help="Do not send gyroscope data in DSU packets.",
-    )
-    parser.add_argument(
-        "--rate",
-        type=int,
-        default=250,
-        help="Sampling and send rate in Hz (default: 250).",
-    )
-    parser.add_argument(
-        "-s",
-        "--sensitivity",
-        type=float,
-        default=1.0,
-        help="Global motion sensitivity multiplier (default: 1.0).",
-    )
+
+    parser.add_argument("--no-accel", action="store_true", help="Do not send accelerometer data in DSU packets.")
+    parser.add_argument("--no-gyro", action="store_true", help="Do not send gyroscope data in DSU packets.")
+    parser.add_argument("--rate", type=int, default=250, help="Sampling and send rate in Hz (default: 250).",)
+    parser.add_argument("-s", "--sensitivity", type=float, default=1.0, help="Global motion sensitivity multiplier (default: 1.0).")
+
+    parser.add_argument('--clamp-accel', action='store_true', help="Enable accelerometer clamping")
+    parser.add_argument('--clamp-gyro', action='store_true', help="Enable gyroscope clamping")
+    parser.add_argument('--clamp-accel-limit', type=float, default=5.0, help="Accel clamp limit in g (default: 5.0)")
+    parser.add_argument('--clamp-gyro-limit', type=float, default=150.0, help="Gyro clamp limit in deg/s (default: 150.0)")
+
     args = parser.parse_args()
 
     imu_reader = WindowsImuReader(poll_hz=args.rate)
