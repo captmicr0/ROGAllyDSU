@@ -167,6 +167,8 @@ class DSUServer:
         self.sock.settimeout(0.1)
 
         self._clients = set()
+        self._reportclients = set()
+        self._reportslots = []
         self._stop = False
 
         self._recv_thread = threading.Thread(target=self._recv_loop, daemon=True)
@@ -203,13 +205,10 @@ class DSUServer:
                     self.sock.sendto(packet, addr)
                 elif event_type == 0x100001:
                     numports = int.from_bytes(data[20:20+4], 'little', signed=True)
-                    barry = []
+                    self._reportslots = []
                     for p in range(1, 1+numports):
-                        barry += [data[24+p-1]]
-                    print(f"Controller Info Request [# OF PORTS: {numports}] BYTES: {barry}")
-                    for p in range(1, 1+numports):
-                        packet = self._build_info_packet(p-1, p==1) # only report slot 0 as connected
-                        self.sock.sendto(packet, addr)
+                        self._reportslots += [data[24+p-1]]
+                    self._reportclients.add(addr)
                 elif event_type == 0x100002: # Actual controllers data
                     if addr not in self._clients:
                         ip, port = addr
@@ -248,11 +247,17 @@ class DSUServer:
             )
             packet_counter = (packet_counter + 1) & 0xFFFFFFFF
 
+            for addr in list(self._reportclients):
+                try:
+                    for slot in self._reportslots:
+                        packet = self._build_info_packet(slot, slot==0) # only report slot 0 as connected
+                        self.sock.sendto(packet, addr)
+                except OSError:
+                    self._reportclients.discard(addr)
+            
             for addr in list(self._clients):
                 try:
                     self.sock.sendto(packet, addr)
-                    infopacket = self._build_info_packet(0, True) # report slot 0 as connected
-                    self.sock.sendto(infopacket, addr)
                 except OSError:
                     self._clients.discard(addr)
 
