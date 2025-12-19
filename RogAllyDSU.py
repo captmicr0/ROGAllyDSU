@@ -198,9 +198,9 @@ class DSUServer:
                     barry = []
                     for p in range(1, 1+numports):
                         barry += [data[24+p-1]]
-                    print(f"Controller data requested... (# OF PORTS: {numports}) (BYTES: {barry})")
-                    packet = self._build_info_packet()
-                    self.sock.sendto(packet, addr)
+                    for p in range(1, 1+numports):
+                        packet = self._build_info_packet(p-1, p==1) # only report slot 0 as connected
+                        self.sock.sendto(packet, addr)
                 if event_type == 0x100002: # Actual controllers data
                     if addr not in self._clients:
                         ip, port = addr
@@ -248,7 +248,10 @@ class DSUServer:
 
             time.sleep(self.send_interval)
 
-    def _build_info_packet(self):
+    def _build_info_packet(self, slot, connected):
+        last_byte = (0x50 + slot) & 0xFF
+        mac = bytes([0x22, 0x33, 0x44, 0x50, 0x00, last_byte])
+
         packet = b"".join(
             [
                 # HEADER
@@ -263,12 +266,12 @@ class DSUServer:
                                                         # (0x100002 = Actual controllers data)
 
                 # BEGINNING
-                struct.pack("<B", 0),                   # SLOT
-                struct.pack("<B", 2),                   # SLOT STATE (2 = CONNECTED)
+                struct.pack("<B", slot),                # SLOT
+                struct.pack("<B", (2 if connected else False)), # SLOT STATE (2 = CONNECTED)
                 struct.pack("<B", 2),                   # DEVICE MODEL (2 = FULL GYRO)
                 struct.pack("<B", 2),                   # CONNECTION TYPE (2 = BLUETOOTH)
-                struct.pack(">6s", b'\x22\x33\x44\x55'),# MAC ADDRESS OF DEVICE
-                struct.pack("<B", 0x05),                # BATTERY STATUS (0x05 = FULL)
+                struct.pack(">6s", mac),                # MAC ADDRESS OF DEVICE
+                struct.pack("<B", (0x05 if connected else 0)),  # BATTERY STATUS (0x05 = FULL)
 
                 # ZERO BYTE
                 struct.pack("<B", 0),                   # ZERo BYTE
@@ -311,7 +314,7 @@ class DSUServer:
                 struct.pack("<B", 2),                   # SLOT STATE (2 = CONNECTED)
                 struct.pack("<B", 2),                   # DEVICE MODEL (2 = FULL GYRO)
                 struct.pack("<B", 2),                   # CONNECTION TYPE (2 = BLUETOOTH)
-                struct.pack(">6s", b'\x22\x33\x44\x55'),# MAC ADDRESS OF DEVICE
+                struct.pack(">6s", b'\x22\x33\x44\x50'),# MAC ADDRESS OF DEVICE
                 struct.pack("<B", 0x05),                # BATTERY STATUS (0x05 = FULL)
 
                 # CONTROLLER DATA
