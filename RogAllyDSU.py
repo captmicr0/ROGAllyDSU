@@ -359,7 +359,7 @@ def main():
         description="ROG Ally DSU motion server (accel+gyro)"
     )
 
-    parser.add_argument("--no-accel", action="store_true", help="Do not send accelerometer data in DSU packets.")
+    parser.add_argument("--accel", action="store_true", help="Send accelerometer data in DSU packets.")
     parser.add_argument("--no-gyro", action="store_true", help="Do not send gyroscope data in DSU packets.")
     parser.add_argument("--rate", type=int, default=250, help="Sampling and send rate in Hz (default: 250).",)
     parser.add_argument("-s", "--sensitivity", type=float, default=1.0, help="Global motion sensitivity multiplier (default: 1.0).")
@@ -375,7 +375,7 @@ def main():
     server = DSUServer(
         imu_reader,
         send_hz=args.rate,
-        send_accel=not args.no_accel,
+        send_accel=args.no_accel,
         send_gyro=not args.no_gyro,
         sensitivity=args.sensitivity,
     )
