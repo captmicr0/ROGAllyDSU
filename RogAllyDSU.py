@@ -192,7 +192,7 @@ class DSUServer:
             magic = data[:4]
             # DSUC = client → server registration; record client endpoint.
             if magic == b"DSUC":
-                event_type = int.from_bytes(x[16:16+4], 'little', signed=False)
+                event_type = int.from_bytes(data[16:16+4], 'little', signed=False)
                 if event_type == 0x100001:
                     packet = self._build_info_packet()
                     self.sock.sendto(packet, addr)
