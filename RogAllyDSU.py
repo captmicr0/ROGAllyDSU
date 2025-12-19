@@ -145,7 +145,7 @@ class WindowsImuReader:
 class DSUServer:
     DSU_PORT = 26760
 
-    def __init__(self, imu_reader, send_hz=1000, send_accel=True,
+    def __init__(self, imu_reader, send_hz=500, send_accel=False,
                  send_gyro=True, sensitivity=1.0):
         self.imu_reader = imu_reader
         self.send_interval = 1.0 / send_hz
@@ -242,8 +242,8 @@ class DSUServer:
             for addr in list(self._clients):
                 try:
                     self.sock.sendto(packet, addr)
-                    infopacket = self._build_info_packet(0, True) # report slot 0 as connected
-                    self.sock.sendto(infopacket, addr)
+                    #infopacket = self._build_info_packet(0, True) # report slot 0 as connected
+                    #self.sock.sendto(infopacket, addr)
                 except OSError:
                     self._clients.discard(addr)
 
@@ -373,7 +373,7 @@ def main():
     parser.add_argument("--accel", action="store_true", help="Send accelerometer data in DSU packets.")
     parser.add_argument("--no-gyro", action="store_true", help="Do not send gyroscope data in DSU packets.")
     parser.add_argument("--poll-rate", type=int, default=250, help="Sampling rate in Hz (default: 250).",)
-    parser.add_argument("--send-rate", type=int, default=1000, help="Send rate in Hz (default: 1000).",)
+    parser.add_argument("--send-rate", type=int, default=500, help="Send rate in Hz (default: 500).",)
     parser.add_argument("-s", "--sensitivity", type=float, default=1.0, help="Global motion sensitivity multiplier (default: 1.0).")
 
     parser.add_argument('--clamp-accel', action='store_true', help="Enable accelerometer clamping")
