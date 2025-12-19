@@ -129,14 +129,14 @@ class WindowsImuReader:
         #   AngularVelocityX -> pitch
         #   AngularVelocityY -> roll
         #   AngularVelocityZ -> yaw
-        gyro_pitch = -gx
-        gyro_yaw   = gz
-        gyro_roll  = -gy
+        #gyro_pitch = -gx
+        #gyro_yaw   = gz
+        #gyro_roll  = -gy
 
         # This is doplhins config
-        #gyro_pitch = gx
-        #gyro_yaw   = gy
-        #gyro_roll  = gz
+        gyro_pitch = gx
+        gyro_yaw   = gy
+        gyro_roll  = gz
 
         return accel_x, accel_y, accel_z, gyro_pitch, gyro_yaw, gyro_roll
 
