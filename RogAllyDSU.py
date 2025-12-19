@@ -129,7 +129,7 @@ class WindowsImuReader:
         #   AngularVelocityX -> pitch
         #   AngularVelocityY -> roll
         #   AngularVelocityZ -> yaw
-        gyro_pitch = -gx
+        gyro_pitch = gx
         gyro_yaw   = gz
         gyro_roll  = -gy
 
