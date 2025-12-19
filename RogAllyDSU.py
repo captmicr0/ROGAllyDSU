@@ -198,7 +198,7 @@ class DSUServer:
                     barry = []
                     for p in range(1, 1+numports):
                         barry += [data[24+p-1]]
-                    print(f"Controller data requested... (# OF PORTS: {numports}) (BYTES: {bytearry})")
+                    print(f"Controller data requested... (# OF PORTS: {numports}) (BYTES: {barry})")
                     packet = self._build_info_packet()
                     self.sock.sendto(packet, addr)
                 if event_type == 0x100002: # Actual controllers data
