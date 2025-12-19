@@ -243,7 +243,7 @@ class DSUServer:
                 try:
                     self.sock.sendto(packet, addr)
                     infopacket = self._build_info_packet(0, True) # report slot 0 as connected
-                    self.sock.sendto(packet, infopacket)
+                    self.sock.sendto(infopacket, addr)
                 except OSError:
                     self._clients.discard(addr)
 
