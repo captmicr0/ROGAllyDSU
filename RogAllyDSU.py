@@ -201,6 +201,7 @@ class DSUServer:
                     barry = []
                     for p in range(1, 1+numports):
                         barry += [data[24+p-1]]
+                    print(f"Controller Info Request [# OF PORTS: {numports}] BYTES: {barry}")
                     for p in range(1, 1+numports):
                         packet = self._build_info_packet(p-1, p==1) # only report slot 0 as connected
                         self.sock.sendto(packet, addr)
