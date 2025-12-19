@@ -208,11 +208,14 @@ class DSUServer:
                     self._reportslots = []
                     for p in range(1, 1+numports):
                         self._reportslots += [data[24+p-1]]
+                    if addr not in self._reportclients:
+                        ip, port = addr
+                        print(f"Client reqsting controller info from {ip}:{port}")
                     self._reportclients.add(addr)
                 elif event_type == 0x100002: # Actual controllers data
                     if addr not in self._clients:
                         ip, port = addr
-                        print(f"Client connected from {ip}:{port}")
+                        print(f"Client reqsting controller data from {ip}:{port}")
                     self._clients.add(addr)
 
     def _send_loop(self):
