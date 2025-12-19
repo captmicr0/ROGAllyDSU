@@ -375,7 +375,7 @@ def main():
     server = DSUServer(
         imu_reader,
         send_hz=args.rate,
-        send_accel=args.no_accel,
+        send_accel=args.accel,
         send_gyro=not args.no_gyro,
         sensitivity=args.sensitivity,
     )
