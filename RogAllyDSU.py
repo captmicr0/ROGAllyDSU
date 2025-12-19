@@ -242,7 +242,6 @@ class DSUServer:
             for addr in list(self._reportclients):
                 try:
                     for slot in self._reportslots:
-                        print(f"slot {slot} info report")
                         packet = self._build_info_packet(slot, slot==0) # only report slot 0 as connected
                         self.sock.sendto(packet, addr)
                 except OSError:
