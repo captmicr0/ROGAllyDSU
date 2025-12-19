@@ -193,6 +193,9 @@ class DSUServer:
             # DSUC = client → server registration; record client endpoint.
             if magic == b"DSUC":
                 event_type = int.from_bytes(data[16:16+4], 'little', signed=False)
+                if event_type == 0x100000:
+                    packet = self._build_ver_packet()
+                    self.sock.sendto(packet, addr)
                 if event_type == 0x100001:
                     numports = int.from_bytes(data[20:20+4], 'little', signed=True)
                     barry = []
@@ -248,6 +251,34 @@ class DSUServer:
                     self._clients.discard(addr)
 
             time.sleep(self.send_interval)
+    
+    def _build_ver_packet(self):
+        packet = b"".join(
+            [
+                # HEADER
+                struct.pack(">4s", b'DSUS'),            # MAGIC STRING (DSUS)
+                struct.pack("<H", 1001),                # VERSION (1001)
+                struct.pack("<H", 16),                  # LENGTH
+                struct.pack("<I", 0),                   # CRC32
+                struct.pack("<I", 0x66778899),          # CLIENT/SERVER ID
+
+                # EVENT TYPE
+                struct.pack("<I", 0x100000),            # EVENT TYPE (Not actually part of header so it counts as length)
+                                                        # (0x100001 = Information about connected controllers)
+
+                # MAX PPROTOCOL VERSION
+                struct.pack("<H", 1001),                # MAX PPROTOCOL VERSION
+            ]
+        )
+        
+        crc = zlib.crc32(packet) & 0xFFFFFFFF
+
+        # Splice CRC into bytes 8–11 (little‑endian)
+        packet = bytearray(packet)
+        packet[8:12] = struct.pack("<I", crc)
+
+        return bytes(packet)
+
 
     def _build_info_packet(self, slot, connected):
         last_byte = (0x50 + slot) & 0xFF
