@@ -254,7 +254,7 @@ class DSUServer:
                 struct.pack("<I", 0x66778899),          # CLIENT/SERVER ID
 
                 # EVENT TYPE
-                struct.pack("<I", 0x100002),            # EVENT TYPE (Not actually part of header so it counts as length)
+                struct.pack("<I", 0x100001),            # EVENT TYPE (Not actually part of header so it counts as length)
                                                         # (0x100002 = Actual controllers data)
 
                 # BEGINNING
