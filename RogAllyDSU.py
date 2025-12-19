@@ -194,6 +194,11 @@ class DSUServer:
             if magic == b"DSUC":
                 event_type = int.from_bytes(data[16:16+4], 'little', signed=False)
                 if event_type == 0x100001:
+                    numports = int.from_bytes(data[20:20+4], 'little', signed=True)
+                    bytearry = []
+                    for p in range(1, 1+numports):
+                        bytearry += [int.from_bytes(data[24+p-1], 'little', signed=False)]
+                    print(f"Controller data requested... (# OF PORTS: {numports}) (BYTES: {bytearry})")
                     packet = self._build_info_packet()
                     self.sock.sendto(packet, addr)
                 if event_type == 0x100002: # Actual controllers data
