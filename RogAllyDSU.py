@@ -272,7 +272,7 @@ class DSUServer:
                 struct.pack("<B", slot),                        # SLOT
                 struct.pack("<B", (2 if connected else False)), # SLOT STATE (2 = CONNECTED)
                 struct.pack("<B", (2 if connected else 0)),     # DEVICE MODEL (2 = FULL GYRO)
-                struct.pack("<B", (1 if connected else 0),      # CONNECTION TYPE (0 = NOT APPLICABLE, 1 = USB, 2 = BLUETOOTH)
+                struct.pack("<B", (1 if connected else 0)),     # CONNECTION TYPE (0 = NOT APPLICABLE, 1 = USB, 2 = BLUETOOTH)
                 struct.pack(">6s", mac),                        # MAC ADDRESS OF DEVICE
                 struct.pack("<B", (0x05 if connected else 0)),  # BATTERY STATUS (0x05 = FULL)
 
