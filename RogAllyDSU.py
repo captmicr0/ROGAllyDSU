@@ -383,10 +383,10 @@ def main():
     print(
         f"ROG Ally DSU motion server running at {server.host_ip}:{server.DSU_PORT}"
     )
-    if args.no_accel:
-        print("NOTE: accelerometer data disabled (sending gyro only).")
+    if args.accel:
+        print("NOTE: accelerometer data enabled.")
     if args.no_gyro:
-        print("NOTE: gyroscope data disabled (sending accel only).")
+        print("NOTE: gyroscope data disabled.")
     print("Configure your emulator to use this IP/port as a cemuhook/DSU server.")
 
     server.start()
