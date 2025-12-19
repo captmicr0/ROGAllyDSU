@@ -59,6 +59,11 @@ class WindowsImuReader:
                     ay = float(a_read.acceleration_y)  # pitch
                     az = float(a_read.acceleration_z)  # yaw
 
+                    ACCEL_CLAMP = 5.0  # g-force max
+                    ax = max(min(ax, ACCEL_CLAMP), -ACCEL_CLAMP)
+                    ay = max(min(ay, ACCEL_CLAMP), -ACCEL_CLAMP)
+                    az = max(min(az, ACCEL_CLAMP), -ACCEL_CLAMP)
+
                     with self._lock:
                         self._accel_x = ax
                         self._accel_y = ay
@@ -70,6 +75,12 @@ class WindowsImuReader:
                     gx = float(g_read.angular_velocity_x)  # pitch (deg/s)
                     gy = float(g_read.angular_velocity_y)  # roll
                     gz = float(g_read.angular_velocity_z)  # yaw
+
+                    # Clamp to realistic ranges to filter noise/spikes
+                    GYRO_CLAMP = 150.0  # degrees per second max (senor seems to max at -124/+124)
+                    gx = max(min(gx, GYRO_CLAMP), -GYRO_CLAMP)
+                    gy = max(min(gy, GYRO_CLAMP), -GYRO_CLAMP)
+                    gz = max(min(gz, GYRO_CLAMP), -GYRO_CLAMP)
 
                     with self._lock:
                         self._gyro_x = gx
