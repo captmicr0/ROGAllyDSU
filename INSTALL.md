@@ -1,10 +1,5 @@
 # Add standalone Windows EXE builds to captmicr0/ROGAllyDSU
 
-Copy both files from this ZIP into the **existing** GitHub repository, retaining their paths:
-
-- `frozen_entry.py` at the repository root (next to `ally_dsu.py`)
-- `.github/workflows/build-windows.yml`
-
 Commit and push to `main`, or select **Actions > Build Windows standalone EXE > Run workflow**.
 When it succeeds, download the `ROGAllyDSU-Windows-x64` artifact from the workflow run.
 The artifact contains a ZIP with `ROGAllyDSU.exe` and `README.txt`.
