@@ -237,7 +237,29 @@ class DSUServer:
         # subsequent recvfrom(). Disable that behavior on this UDP socket.
         if os.name == 'nt':
             try:
-                self.sock.ioctl(0x9800000C, False)  # SIO_UDP_CONNRESET
+                # Disable Windows UDP connection-reset errors.
+                # Use Winsock directly because Python's socket.ioctl()
+                # does not support SIO_UDP_CONNRESET.
+                import ctypes
+
+                SIO_UDP_CONNRESET = 0x9800000C
+                disabled = ctypes.c_ulong(0)
+                bytes_returned = ctypes.c_ulong(0)
+
+                result = ctypes.windll.ws2_32.WSAIoctl(
+                    self.sock.fileno(),
+                    SIO_UDP_CONNRESET,
+                    ctypes.byref(disabled),
+                    ctypes.sizeof(disabled),
+                    None,
+                    0,
+                    ctypes.byref(bytes_returned),
+                    None,
+                    None,
+                )
+
+                if result != 0:
+                    raise ctypes.WinError()
             except OSError as exc:
                 LOG.warning('Could not disable UDP connection resets: %s', exc)
         self.sock.bind((host, port))
