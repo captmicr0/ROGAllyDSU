@@ -1,0 +1,101 @@
+name: Build Windows standalone EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Python for build runner only
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+          cache: 'pip'
+          cache-dependency-path: .github/workflows/build-windows.yml
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pyinstaller>=6,<7" winsdk
+
+      - name: Run DSU protocol tests
+        shell: pwsh
+        run: python -m unittest -v test_ally_dsu
+
+      - name: Build self-contained executable
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --console `
+            --name ROGAllyDSU `
+            --paths . `
+            --collect-all winsdk `
+            frozen_entry.py
+
+      - name: Test packaged executable (help output)
+        shell: pwsh
+        run: .\dist\ROGAllyDSU.exe --help
+
+      - name: Test packaged UDP server (demo mode)
+        shell: pwsh
+        run: |
+          $server = Start-Process -FilePath (Resolve-Path .\dist\ROGAllyDSU.exe) -ArgumentList '--demo', '--status-interval', '2' -PassThru
+          try {
+            Start-Sleep -Seconds 5
+            if ($server.HasExited) { throw "Packaged DSU server exited early with $($server.ExitCode)" }
+            python probe_dsu.py --seconds 4
+            if ($LASTEXITCODE -ne 0) { throw "DSU probe exited with code $LASTEXITCODE" }
+          }
+          finally {
+            if (-not $server.HasExited) { Stop-Process -Id $server.Id -Force }
+          }
+
+      - name: Make portable ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item dist\ROGAllyDSU.exe release\
+          @'
+          ROG Ally DSU - standalone Windows x64
+
+          Double-click ROGAllyDSU.exe on the ROG Ally.
+          No Python installation is required.
+          PadTest/DSU client: 127.0.0.1:26760 (slot 0).
+          Leave the console open while using motion input.
+
+          Options (from a terminal):
+            ROGAllyDSU.exe --help
+            ROGAllyDSU.exe --send-rate 250
+            ROGAllyDSU.exe --host 0.0.0.0
+
+          The Windows gyro worker remains an independent process.
+          The main UDP process sends continuously when subscribed.
+          '@ | Set-Content -Path release\README.txt
+          Compress-Archive -Path release\* -DestinationPath ROGAllyDSU-Windows-x64.zip -Force
+
+      - name: Upload build to Actions artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROGAllyDSU-Windows-x64
+          path: ROGAllyDSU-Windows-x64.zip
+          if-no-files-found: error
+
+      - name: Publish release on version tags
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          gh release create "${{ github.ref_name }}" ROGAllyDSU-Windows-x64.zip --generate-notes --title "${{ github.ref_name }}"
