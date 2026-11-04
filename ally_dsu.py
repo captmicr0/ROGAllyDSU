@@ -93,7 +93,7 @@ def motion_packet(server_id: int, sequence: int, timestamp_us: int, motion: Moti
     return result
 
 
-def _sensor_worker(shared, stop, hz, accel, gyro, sensitivity, accel_sensitivity, axes):
+def _sensor_worker(shared, stop, hz, accel, gyro, sensitivity, accel_sensitivity, axes, pitch_sign):
     """Separate OS PROCESS: blocked WinRT calls cannot stall the UDP server."""
     try:
         from winsdk.windows.devices.sensors import Gyrometer, Accelerometer
@@ -133,7 +133,9 @@ def _sensor_worker(shared, stop, hz, accel, gyro, sensitivity, accel_sensitivity
                     if axes == 'original':
                         ax, ay, az = ay, az, ax
                     values = [safe_float(v) * accel_sensitivity for v in (ax, ay, az)]
-                    values += [safe_float(v) * sensitivity for v in (gx, gy, gz)]
+                    values += [safe_float(gx) * sensitivity * pitch_sign,
+                               safe_float(gy) * sensitivity,
+                               safe_float(gz) * sensitivity]
                     # One short critical section, never held across a WinRT call.
                     with shared.get_lock():
                         for i, v in enumerate(values):
@@ -165,12 +167,12 @@ class WindowsSensors:
     """WinRT runs in its own PROCESS so a blocking sensor poll cannot stall UDP."""
 
     def __init__(self, hz=125, *, accel=True, gyro=True,
-                 sensitivity=1.0, accel_sensitivity=1.0, axes='original'):
+                 sensitivity=1.0, accel_sensitivity=1.0, axes='original', pitch_sign=-1.0):
         self.ctx = mp.get_context('spawn')
         # Six floats, successful reading count, last reading monotonic time.
         self.shared = self.ctx.Array('d', [0.0] * 8, lock=True)
         self.stop_event = self.ctx.Event()
-        self.options = (hz, accel, gyro, sensitivity, accel_sensitivity, axes)
+        self.options = (hz, accel, gyro, sensitivity, accel_sensitivity, axes, pitch_sign)
         self.process = None
 
     def start(self):
@@ -221,7 +223,7 @@ class DemoSensors:
 
 class DSUServer:
     def __init__(self, sensors, *, host='127.0.0.1', port=PORT, send_hz=125,
-                 timeout=15.0, status_interval=10.0):
+                 timeout=5.0, status_interval=10.0):
         self.sensors = sensors
         self.send_interval = 1 / send_hz
         self.timeout = timeout
@@ -230,6 +232,14 @@ class DSUServer:
         self.clients = {}  # (IP, port) -> (last_seen_monotonic, client_id)
         self._stop = threading.Event()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Windows maps an ICMP 'port unreachable' (e.g. after Yuzu's Test
+        # Server closes its temporary UDP socket) to WSAECONNRESET on a
+        # subsequent recvfrom(). Disable that behavior on this UDP socket.
+        if os.name == 'nt':
+            try:
+                self.sock.ioctl(0x9800000C, False)  # SIO_UDP_CONNRESET
+            except OSError as exc:
+                LOG.warning('Could not disable UDP connection resets: %s', exc)
         self.sock.bind((host, port))
         self.sock.setblocking(False)
         self.address = self.sock.getsockname()
@@ -307,8 +317,16 @@ class DSUServer:
                                 data, addr = self.sock.recvfrom(2048)
                             except BlockingIOError:
                                 break
+                            except OSError as exc:
+                                if getattr(exc, 'winerror', None) in (10054, 10061) or getattr(exc, 'errno', None) in (10054, 10061):
+                                    LOG.debug('Ignored UDP reset from closed test client: %s', exc)
+                                    break
+                                raise
                             self._handle(data, addr)
                 except OSError as exc:
+                    if getattr(exc, 'winerror', None) in (10054, 10061) or getattr(exc, 'errno', None) in (10054, 10061):
+                        LOG.debug('Ignored UDP reset from closed test client: %s', exc)
+                        continue
                     if not self._stop.is_set():
                         LOG.error('Socket error: %s', exc)
                     break
@@ -348,13 +366,15 @@ def main():
     ap.add_argument('--port', type=int, default=PORT)
     ap.add_argument('--send-rate', type=int, default=125, help='Motion packets per second (default 125)')
     ap.add_argument('--poll-rate', type=int, default=125, help='Windows sensor polls per second (default 125)')
-    ap.add_argument('--timeout', type=float, default=15, help='Subscription timeout seconds (default 15)')
+    ap.add_argument('--timeout', type=float, default=5, help='Subscription timeout seconds (default 5)')
     ap.add_argument('--status-interval', type=float, default=10)
     ap.add_argument('--no-accel', action='store_true')
     ap.add_argument('--no-gyro', action='store_true')
     ap.add_argument('--sensitivity', '-s', type=float, default=1.0, help='Gyro scale')
     ap.add_argument('--accel-sensitivity', type=float, default=1.0)
     ap.add_argument('--axes', choices=('original', 'direct'), default='direct')
+    ap.add_argument('--pitch-sign', type=float, choices=(-1.0, 1.0), default=-1.0,
+                    help='Vertical gyro direction: -1 (default), +1 (original)')
     ap.add_argument('--demo', action='store_true', help='Generate synthetic gyro readings; no WinRT needed')
     ap.add_argument('--verbose', '-v', action='store_true')
     args = ap.parse_args()
@@ -375,7 +395,7 @@ def main():
         sensors = (DemoSensors() if args.demo else WindowsSensors(
             args.poll_rate, accel=not args.no_accel, gyro=not args.no_gyro,
             sensitivity=args.sensitivity, accel_sensitivity=args.accel_sensitivity,
-            axes=args.axes))
+            axes=args.axes, pitch_sign=args.pitch_sign))
         server = DSUServer(sensors, host=args.host, port=args.port,
                            send_hz=args.send_rate, timeout=args.timeout,
                            status_interval=args.status_interval)

@@ -21,6 +21,7 @@ Standalone Python implementation of the DSU/Cemuhook UDP v1001 protocol. **Versi
 - `--sensitivity 0.5` : half gyro angular velocity
 - `--accel-sensitivity 0.5` : half accelerometer values
 - `--axes direct` : use direct WinRT X,Y,Z accelerometer mapping instead of the previous script's Y,Z,X remapping; gyro remains X,Y,Z -> pitch,yaw,roll
+- `--pitch-sign 1` : use the old pitch direction. standard is inverted for yuzu.
 - `--no-accel` : zero accelerometer output if the accelerometer isn't available
 - `--no-gyro` : zero gyroscope output
 - `--timeout 30` : retain inactive subscriptions 30 seconds instead of 15
